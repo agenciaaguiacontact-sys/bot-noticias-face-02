@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+*.jpg
+*.png
+/tmp/
+.venv/
+ultimo_post.txt
+news_debug.txt
+test_results.txt
+gemini_test_results.txt
+models_list.txt

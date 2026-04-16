@@ -1,0 +1,54 @@
+name: 🤖 Bot Notícias Facebook 02
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # A cada 10 minutos (pode ter atraso de até 1h no GitHub)
+  workflow_dispatch:          # Permite rodar manualmente pelo painel do GitHub
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Necessário para fazer commit do posted_ids.json de volta
+
+    steps:
+      - name: 📥 Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: 🐍 Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Instalar dependências Python
+        run: pip install -r requirements.txt
+
+      - name: 🌐 Instalar Playwright + Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: 🤖 Rodar Bot
+        env:
+          SFY_EMAIL:      ${{ secrets.SFY_EMAIL }}
+          SFY_PASSWORD:   ${{ secrets.SFY_PASSWORD }}
+          FB_PAGE_ID:     ${{ secrets.FB_PAGE_ID }}
+          FB_TOKEN:       ${{ secrets.FB_TOKEN }}
+          FB_APP_ID:      ${{ secrets.FB_APP_ID }}
+          FB_APP_SECRET:  ${{ secrets.FB_APP_SECRET }}
+          FB_USER_TOKEN:  ${{ secrets.FB_USER_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python bot.py
+
+      - name: 💾 Salvar estado de posts publicados
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Adiciona posted_ids.json e last_title.txt se existirem
+          git add posted_ids.json last_title.txt 2>/dev/null || true
+          # Só commita se houver mudanças reais
+          if git diff --cached --quiet; then
+            echo "ℹ️ Nenhuma mudança de estado para salvar."
+          else
+            git commit -m "chore: atualizar estado do bot [skip ci]"
+            git push
+          fi
