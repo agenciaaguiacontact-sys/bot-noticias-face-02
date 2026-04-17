@@ -150,7 +150,7 @@ def gerar_gancho(title):
                 f"Não repita o último título: \"{last_t}\"."
             )
             payload = {"contents":[{"parts":[{"text":prompt}]}]}
-            r = requests.post(url, json=payload, timeout=15)
+            r = requests.post(url, json=payload, timeout=60)
             r.raise_for_status()
             raw = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
             
@@ -509,10 +509,6 @@ def main():
             if not gerar_video_ffmpeg(temp_img, audio_sel, temp_video):
                 continue
             
-            response = model.generate_content(
-                f"Gere um gancho viral e hashtags para esta notícia: {titulo}. Resumo: {resumo}",
-                request_options={"timeout": 60}
-            )
             
             padding = "\n.\n.\n.\n.\n.\n"
             hashtags = estetica.get("hashtags", "#noticias #brasil")
