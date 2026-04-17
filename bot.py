@@ -509,6 +509,11 @@ def main():
             if not gerar_video_ffmpeg(temp_img, audio_sel, temp_video):
                 continue
             
+            response = model.generate_content(
+                f"Gere um gancho viral e hashtags para esta notícia: {titulo}. Resumo: {resumo}",
+                request_options={"timeout": 60}
+            )
+            
             padding = "\n.\n.\n.\n.\n.\n"
             hashtags = estetica.get("hashtags", "#noticias #brasil")
             msg = f"😱 {n['title'].upper()} 😱\n\nNotícia urgente! Veja os detalhes chocantes agora... 💣🔥\n\n{hashtags}{padding}🔗 LINK: {n['link']}"
