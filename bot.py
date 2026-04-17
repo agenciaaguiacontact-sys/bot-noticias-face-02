@@ -16,9 +16,10 @@ import re
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from dotenv import load_dotenv
 import traceback
+import subprocess
+import glob
+from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
@@ -176,6 +177,87 @@ def gerar_gancho(title):
             log.warning(f"Erro Gemini (tentativa {attempt}): {e}")
             
     return default_res
+
+def gerar_video_ffmpeg(img_path, audio_path, output_path, duration=10):
+    """
+    Cria um vídeo de 'duration' segundos a partir de uma imagem e um áudio (looper).
+    """
+    log.info(f"🎞️ Gerando vídeo de {duration}s com FFmpeg...")
+    try:
+        # Comando: loop da imagem por X segundos, loop do áudio se necessário, codec compatível com Reels
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-t", str(duration), "-i", img_path,
+            "-stream_loop", "-1", "-i", audio_path,
+            "-c:v", "libx264", "-tune", "stillimage",
+            "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p",
+            "-t", str(duration),
+            output_path
+        ]
+        subprocess.run(cmd, check=True, capture_output=True)
+        log.info(f"✅ Vídeo gerado: {output_path}")
+        return True
+    except Exception as e:
+        log.error(f"❌ Erro no FFmpeg: {e}")
+        return False
+
+def publicar_reel(page_id, token, video_path, message):
+    """
+    Publica um Reel no Facebook usando o processo de 3 etapas (Start, Upload, Finish).
+    """
+    log.info("🚀 Iniciando upload de Reel...")
+    
+    # 1. Start Upload Session
+    try:
+        url_init = f"https://graph.facebook.com/v22.0/{page_id}/video_reels"
+        res_init = requests.post(url_init, params={
+            "upload_phase": "start",
+            "access_token": token
+        }, timeout=30).json()
+        
+        video_id = res_init.get("video_id")
+        if not video_id:
+            log.error(f"Erro ao iniciar sessão Reel: {res_init}")
+            return None
+            
+        # 2. Upload the Video
+        file_size = os.path.getsize(video_path)
+        url_upload = f"https://rupload.facebook.com/video-upload/v22.0/{video_id}"
+        headers = {
+            "Authorization": f"OAuth {token}",
+            "offset": "0",
+            "file_size": str(file_size),
+            "Content-Type": "application/octet-stream"
+        }
+        with open(video_path, "rb") as f:
+            res_up = requests.post(url_upload, headers=headers, data=f, timeout=120)
+            
+        if res_up.status_code != 200:
+            log.error(f"Erro no upload binário: {res_up.text}")
+            return None
+            
+        # 3. Finish and Publish
+        url_finish = f"https://graph.facebook.com/v22.0/{page_id}/video_reels"
+        payload = {
+            "upload_phase": "finish",
+            "video_id": video_id,
+            "video_state": "PUBLISHED",
+            "description": message,
+            "access_token": token
+        }
+        res_finish = requests.post(url_finish, data=payload, timeout=30).json()
+        
+        if res_finish.get("success"):
+            log.info(f"✅ REEL PUBLICADO! ID: {video_id}")
+            return video_id
+        else:
+            log.error(f"Erro ao finalizar Reel: {res_finish}")
+            return None
+            
+    except Exception as e:
+        log.error(f"Erro no processo de publicação de Reel: {e}")
+        return None
 
 def adicionar_texto_premium(img_bytes, dados_esteticos):
     # dados_esteticos = {"hook": "...", "tag": "...", "color": (R,G,B,A), "emoji": "hex_code"}
@@ -410,26 +492,42 @@ def main():
             estetica = gerar_gancho(n["title"])
             img_b = adicionar_texto_premium(img_data, estetica)
             
+            # Salvar imagem temporária para o FFmpeg
+            temp_img = "temp_post.jpg"
+            with open(temp_img, "wb") as f:
+                f.write(img_b)
+            
+            # Selecionar áudio aleatório
+            audio_files = glob.glob("AUDIOS NEWS/*.mp3")
+            if not audio_files:
+                log.error("❌ Nenhum arquivo MP3 encontrado na pasta AUDIOS NEWS!")
+                continue
+            
+            audio_sel = random.choice(audio_files)
+            temp_video = "temp_reel.mp4"
+            
+            if not gerar_video_ffmpeg(temp_img, audio_sel, temp_video):
+                continue
+            
             padding = "\n.\n.\n.\n.\n.\n"
             hashtags = estetica.get("hashtags", "#noticias #brasil")
             msg = f"😱 {n['title'].upper()} 😱\n\nNotícia urgente! Veja os detalhes chocantes agora... 💣🔥\n\n{hashtags}{padding}🔗 LINK: {n['link']}"
             
-            r_fb = requests.post(
-                f"{FB_GRAPH}/{FB_PAGE_ID}/photos",
-                files={"source": ("f.jpg", img_b, "image/jpeg")},
-                data={"message": msg, "access_token": FB_TOKEN, "published": "true"},
-                timeout=60
-            )
-            resp_data = r_fb.json()
-            if "id" in resp_data:
-                post_id = resp_data["id"]
-                log.info(f"✅ PUBLICADO! ID: {post_id}")
-                log.info(f"🔗 LINK: https://www.facebook.com/{FB_PAGE_ID}/posts/{post_id.split('_')[-1]}")
+            video_id = publicar_reel(FB_PAGE_ID, FB_TOKEN, temp_video, msg)
+            
+            if video_id:
+                log.info(f"🔗 LINK REEL: https://www.facebook.com/reels/{video_id}/")
                 posted.add(n["id"])
                 save_posted(posted)
+                
+                # Limpeza
+                for f in [temp_img, temp_video]:
+                    if os.path.exists(f): os.remove(f)
                 break
             else:
-                log.error(f"Erro FB: {resp_data}")
+                log.error("Falha ao publicar Reel.")
+                if os.path.exists(temp_img): os.remove(temp_img)
+                if os.path.exists(temp_video): os.remove(temp_video)
         except Exception as e: 
             log.error(f"Erro no loop principal: {e}")
             log.error(traceback.format_exc())
