@@ -1,9 +1,8 @@
 name: 🤖 Bot Notícias Facebook 02
 
+# O robô agora só acorda quando o Google Apps Script mandar um sinal via API (workflow_dispatch)
 on:
-  schedule:
-    - cron: '*/10 * * * *'  # A cada 10 minutos (pode ter atraso de até 1h no GitHub)
-  workflow_dispatch:          # Permite rodar manualmente pelo painel do GitHub
+  workflow_dispatch:          # Permite o disparo manual e via Google Script
 
 jobs:
   run-bot:
