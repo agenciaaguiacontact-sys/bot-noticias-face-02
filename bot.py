@@ -427,9 +427,9 @@ def adicionar_texto_premium(img_bytes, dados_esteticos):
     # 7. Emojis de Reação (Opinião ao lado direito)
     if reactions:
         # Posição: um pouco abaixo do título, dentro do quadrado 1:1
-        react_y = ty2 + int(20 * sf)
-        r_emoji_size = int(f_size * 0.75)
-        f_react_size = int(badge_h * 0.7)
+        react_y = ty2 + int(55 * sf) # Ainda mais para baixo
+        r_emoji_size = int(f_size * 0.51) # +20% de redução (era 0.64)
+        f_react_size = int(badge_h * 0.48) # +20% de redução (era 0.6)
         f_react = ImageFont.truetype(font_path, f_react_size) if font_path else ImageFont.load_default()
 
         # Calcular largura total do bloco de reações (Emoji + Espaço + Texto + Gap)
