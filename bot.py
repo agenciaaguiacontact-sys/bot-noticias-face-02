@@ -403,7 +403,7 @@ def adicionar_texto_premium(img_bytes, dados_esteticos):
             e_img = Image.open(BytesIO(r_emoji.content)).convert("RGBA")
             e_size = int(f_size * 1.5)
             e_img = e_img.resize((e_size, e_size), Image.Resampling.LANCZOS)
-            ix, iy = (bw - e_size) // 2, ty1 - e_size - (20 * sf)
+            ix, iy = (bw - e_size) // 2, ty1 - e_size - (2 * sf)
             img_core.paste(e_img, (ix, iy), e_img)
     except: pass
 
@@ -411,13 +411,13 @@ def adicionar_texto_premium(img_bytes, dados_esteticos):
     if reactions:
         # Posição: um pouco abaixo do título, dentro do quadrado 1:1
         react_y = ty2 + int(20 * sf)
-        r_emoji_size = int(f_size * 0.7)
-        f_react_size = int(badge_h * 0.6)
+        r_emoji_size = int(f_size * 0.75)
+        f_react_size = int(badge_h * 0.7)
         f_react = ImageFont.truetype(font_path, f_react_size) if font_path else ImageFont.load_default()
 
         # Calcular largura total do bloco de reações (Emoji + Espaço + Texto + Gap)
-        gap_entre_blocos = int(40 * sf)
-        espacinho = int(10 * sf)
+        gap_entre_blocos = int(35 * sf)
+        espacinho = int(12 * sf)
         total_w = 0
         blocos = []
         
