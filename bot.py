@@ -594,8 +594,9 @@ def main():
             
             audio_sel = random.choice(audio_files)
             temp_video = "temp_reel.mp4"
+            duracao_random = random.randint(20, 30)
             
-            if not gerar_video_ffmpeg(temp_img, audio_sel, temp_video):
+            if not gerar_video_ffmpeg(temp_img, audio_sel, temp_video, duration=duracao_random):
                 continue
             
             

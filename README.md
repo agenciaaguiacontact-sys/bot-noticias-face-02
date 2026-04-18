@@ -31,7 +31,7 @@ O bot segue um pipeline rigoroso de 6 etapas:
 4.  **Criação do Vídeo**:
     - Gera uma imagem quadrada (1080x1080) com a foto da notícia e a tag colorida.
     - Sorteia um áudio da pasta `AUDIOS NEWS`.
-    - Usa o FFmpeg para criar um vídeo `.mp4` de exatos 10 segundos.
+    - Usa o FFmpeg para criar um vídeo `.mp4` com duração aleatória entre 20 e 30 segundos.
 5.  **Publicação**: Faz o upload do vídeo para o Facebook via API de Reels, incluindo na legenda o link oficial da notícia para monetização.
 6.  **Persistência**: Salva o ID da notícia postada e faz um `git push` automático para atualizar o histórico no repositório.
 
