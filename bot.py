@@ -201,36 +201,35 @@ def gerar_gancho(title):
     return default_res
 
 
-def gerar_previa_legenda(title):
-    """Gera uma prévia de 2 frases que gera curiosidade SEM revelar o desfecho da notícia."""
+def gerar_titulo_misterioso(title):
+    """Gera uma frase de mistério/curiosidade curta SEM revelar o desfecho da notícia."""
     if not GEMINI_KEY:
-        return f"Uma situação impressionante está chamando a atenção de todo o Brasil. Você precisa ver o que aconteceu..."
+        return "VEJA O QUE ACONTECEU AGORA"
     
     for attempt in range(3):
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_KEY}"
             prompt = (
                 f"Notícia: \"{title}\"\n"
-                f"Escreva EXATAMENTE 2 frases em português do Brasil para legenda de post no Facebook.\n"
+                f"Crie uma única frase curta de mistério e choque para legenda de Facebook Reels.\n"
                 f"REGRAS OBRIGATÓRIAS:\n"
-                f"1. NÃO revele o resultado/desfecho da notícia.\n"
-                f"2. Crie SUSPENSE e CURIOSIDADE para o leitor querer clicar no link.\n"
-                f"3. Use linguagem informal, impactante e envolvente.\n"
-                f"4. Termine a segunda frase com reticências (...) para deixar em aberto.\n"
-                f"5. NÃO use hashtags, emojis ou o link. Apenas as 2 frases de texto.\n"
-                f"6. Máximo 30 palavras no total.\n"
-                f"Retorne APENAS as 2 frases, sem explicações."
+                f"1. NÃO revele o resultado, desfecho ou a notícia em si.\n"
+                f"2. Crie CURIOSIDADE EXTREMA para o leitor clicar no link.\n"
+                f"3. Use MAIÚSCULAS para dar ênfase.\n"
+                f"4. Máximo 10 palavras.\n"
+                f"5. Exemplo de tom: 'VEJA O QUE LULA DISSE SOBRE OS INTEGRANTES' ou 'VOCÊ NÃO VAI ACREDITAR NO QUE FOI REVELADO'.\n"
+                f"Retorne APENAS a frase, sem explicações, emojis ou aspas."
             )
             payload = {"contents":[{"parts":[{"text":prompt}]}]}
             r = requests.post(url, json=payload, timeout=60)
             r.raise_for_status()
-            previa = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-            if previa:
-                return previa
+            frase = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if frase:
+                return frase.replace('"', '').upper()
         except Exception as e:
-            log.warning(f"Erro ao gerar prévia (tentativa {attempt}): {e}")
+            log.warning(f"Erro ao gerar título misterioso (tentativa {attempt}): {e}")
     
-    return "Uma situação que ninguém esperava está sacudindo o Brasil. O que aconteceu vai te deixar de queixo caído..."
+    return "O QUE ACONTECEU VAI TE DEIXAR DE QUEIXO CAÍDO"
 
 def gerar_video_ffmpeg(img_path, audio_path, output_path, duration=10):
     """
@@ -600,10 +599,20 @@ def main():
                 continue
             
             
-            padding = "\n.\n.\n.\n.\n.\n"
             hashtags = estetica.get("hashtags", "#noticias #brasil").lower()
-            previa = gerar_previa_legenda(n["title"])
-            msg = f"😱 {n['title'].upper()} 😱\n\n{previa}\n\n{hashtags}{padding}🔗VEJA MAIS NO LINK: {n['link']}"
+            misterio = gerar_titulo_misterioso(n["title"])
+            
+            # Formatação solicitada: 
+            # 😱 TAG: MISTERIO... 😱
+            # .
+            # #hashtags
+            # .
+            # .
+            # .
+            # 🔗VEJA MAIS NO LINK: URL
+            
+            padding_bottom = "\n.\n.\n.\n"
+            msg = f"😱 {estetica['tag'].upper()}: {misterio}... 😱\n.\n{hashtags}{padding_bottom}🔗VEJA MAIS NO LINK: {n['link']}"
             
             video_id = publicar_reel(FB_PAGE_ID, FB_TOKEN, temp_video, msg)
             
