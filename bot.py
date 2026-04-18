@@ -390,8 +390,15 @@ def adicionar_texto_premium(img_bytes, dados_esteticos):
     ImageDraw.Draw(temp_box).rectangle([tx1, ty1, tx2, ty2], fill=MAIN_COLOR)
     img_core = Image.alpha_composite(img_core, temp_box)
 
-    # Texto do Título
+    # SOMBRA DO TÍTULO
     cx, cy = (tx1 + tx2) // 2, (ty1 + ty2) // 2
+    shadow_layer = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+    s_draw = ImageDraw.Draw(shadow_layer)
+    s_draw.text((cx + 4 * sf, cy + 4 * sf), l, font=font, fill=(0, 0, 0, 200), anchor="mm")
+    shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=3 * sf))
+    img_core = Image.alpha_composite(img_core, shadow_layer)
+
+    # Texto do Título
     draw_core = ImageDraw.Draw(img_core)
     draw_core.text((cx, cy), l, font=font, fill=(255, 255, 255), anchor="mm")
 
@@ -404,6 +411,16 @@ def adicionar_texto_premium(img_bytes, dados_esteticos):
             e_size = int(f_size * 1.5)
             e_img = e_img.resize((e_size, e_size), Image.Resampling.LANCZOS)
             ix, iy = (bw - e_size) // 2, ty1 - e_size - (2 * sf)
+            
+            # Sombra do Ícone Principal
+            e_shadow = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+            ImageDraw.Draw(e_shadow).ellipse(
+                [ix + 6*sf, iy + 6*sf, ix + e_size + 6*sf, iy + e_size + 6*sf],
+                fill=(0, 0, 0, 150)
+            )
+            e_shadow = e_shadow.filter(ImageFilter.GaussianBlur(radius=6*sf))
+            img_core = Image.alpha_composite(img_core, e_shadow)
+            
             img_core.paste(e_img, (ix, iy), e_img)
     except: pass
 
@@ -445,10 +462,11 @@ def adicionar_texto_premium(img_bytes, dados_esteticos):
                     # Centralizar emoji verticalmente em relação ao texto se necessário, ou usar react_y
                     img_core.paste(ri, (rx, react_y), ri)
                     
-                    # Texto ao lado direito
+                    # Texto ao lado direito (com leve sombra)
                     tx_pos = rx + r_emoji_size + espacinho
                     ty_pos = react_y + (r_emoji_size // 2)
                     draw_core = ImageDraw.Draw(img_core)
+                    draw_core.text((tx_pos + 1*sf, ty_pos + 1*sf), b["label"], font=f_react, fill=(0, 0, 0, 180), anchor="lm")
                     draw_core.text((tx_pos, ty_pos), b["label"], font=f_react, fill=(255, 255, 255), anchor="lm")
                     
                     rx += b["w"] + gap_entre_blocos
