@@ -101,10 +101,10 @@ def limpar_emojis(texto):
 # Cada lista contém tuplas (emoji_hex, label) — máximo 3 por categoria
 # CRIME não tem reações
 REACTION_EMOJIS_BY_CATEGORY = {
-    "URGENTE":  [("1f44d", "Absurdo!"),   ("1f622", "Que triste"),  ("1f621", "Indignado")],
-    "POLITICA": [("1f44d", "Concordo"),   ("2764",  "Apoio"),       ("1f62e", "Chocante")],
+    "URGENTE":  [("1f631", "Absurdo!"),   ("1f622", "Que triste"),  ("1f621", "Indignado")],
+    "POLITICA": [("1f44d", "Concordo"),   ("2764-fe0f",  "Apoio"),   ("1f62e", "Chocante")],
     "ESPORTE":  [("1f44d", "Top demais!"), ("1f606", "Haha"),        ("1f62e", "Incrível")],
-    "FOFOCA":   [("1f606", "Inacreditável"),("2764", "Amei"),        ("1f62e", "Nossa!")],
+    "FOFOCA":   [("1f606", "Inacreditável"),("2764-fe0f", "Amei"),    ("1f62e", "Nossa!")],
     "CRIME":    [],  # Sem emojis de engajamento para notícias de crime
 }
 
