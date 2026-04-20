@@ -471,14 +471,28 @@ def adicionar_texto_premium(img_bytes, dados_esteticos):
                     rx += b["w"] + gap_entre_blocos
             except: pass
 
-    # --- ETAPA FINAL: COMPOSIÇÃO NO FUNDO PRETO 9:16 ---
+    # --- ETAPA FINAL: COMPOSIÇÃO COM FUNDO BLURRED 9:16 ---
     target_w, target_h = 1080, 1920
-    canvas_916 = Image.new("RGBA", (target_w * sf, target_h * sf), (0, 0, 0, 255))
+    tw_sf, th_sf = target_w * sf, target_h * sf
     
-    # Redimensionar img_core para 1080x1080 (bw x bh já são isso em supersampling)
-    # Colar no centro vertical do canvas 9:16
-    y_offset = (target_h * sf - bh) // 2
-    canvas_916.paste(img_core.convert("RGBA"), (0, y_offset))
+    # Criar fundo: Redimensionar o quadrado para preencher o 9:16 (aspect fill)
+    # Como img_core é quadrado, redimensionamos para th_sf x th_sf e cortamos as laterais
+    bg_size = th_sf
+    background = img_core.resize((bg_size, bg_size), Image.Resampling.LANCZOS)
+    
+    # Cortar o centro para ficar 1080x1920 (tw_sf x th_sf)
+    left = (bg_size - tw_sf) // 2
+    background = background.crop((left, 0, left + tw_sf, th_sf))
+    
+    # Aplicar Blur e escurecer para que o conteúdo original ganhe destaque
+    background = background.filter(ImageFilter.GaussianBlur(radius=20 * sf))
+    background = ImageEnhance.Brightness(background).enhance(0.55)
+    
+    canvas_916 = background
+    
+    # Colar o conteúdo nítido e original no centro vertical
+    y_offset = (th_sf - bh) // 2
+    canvas_916.paste(img_core.convert("RGBA"), (0, y_offset), img_core.convert("RGBA"))
     
     # Finalização
     final_img = canvas_916.resize((target_w, target_h), Image.Resampling.LANCZOS).convert("RGB")
