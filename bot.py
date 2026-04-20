@@ -97,15 +97,15 @@ def limpar_emojis(texto):
     # Preserva caracteres acentuados e pontuação, removendo apenas o que não é texto 'humano'
     return re.sub(r'[^\w\s.,!?;:\"\'\(\)\-\u00C0-\u00FF]+', '', texto).strip()
 
-# Mapeamento de emojis de reação do Facebook por categoria
-# Cada lista contém tuplas (emoji_hex, label) — máximo 3 por categoria
-# CRIME não tem reações
-REACTION_EMOJIS_BY_CATEGORY = {
-    "URGENTE":  [("1f631", "Absurdo!"),   ("1f622", "Que triste"),  ("1f621", "Indignado")],
-    "POLITICA": [("1f44d", "Concordo"),   ("2764-fe0f",  "Apoio"),   ("1f62e", "Chocante")],
-    "ESPORTE":  [("1f44d", "Top demais!"), ("1f606", "Haha"),        ("1f62e", "Incrível")],
-    "FOFOCA":   [("1f606", "Inacreditável"),("2764-fe0f", "Amei"),    ("1f62e", "Nossa!")],
-    "CRIME":    [],  # Sem emojis de engajamento para notícias de crime
+# Mapeamento de emojis de reação do Facebook
+FB_REACTIONS = {
+    "LIKE": "1f44d",
+    "LOVE": "2764-fe0f",
+    "CARE": "1f917",
+    "HAHA": "1f606",
+    "WOW": "1f62e",
+    "SAD": "1f622",
+    "ANGRY": "1f621"
 }
 
 def gerar_gancho(title):
@@ -114,7 +114,7 @@ def gerar_gancho(title):
         "color": (255, 0, 0, 200), "emoji": "1f6a8",
         "hashtags": "#noticias #urgente",
         "category": "URGENTE",
-        "reactions": REACTION_EMOJIS_BY_CATEGORY["URGENTE"]
+        "reactions": [("1f631", "Absurdo!"), ("1f622", "Que triste"), ("1f621", "Indignado")]
     }
     if not GEMINI_KEY: return default_res
     
@@ -141,29 +141,20 @@ def gerar_gancho(title):
             prompt = (
                 f"Analise a notícia: \"{title}\".\n"
                 f"Atue como um editor de notícias sensacionalista de alto impacto.\n"
-                f"Retorne APENAS uma linha no formato: HOOK | CATEGORY | EMOJI | HASHTAGS\n"
+                f"Retorne APENAS uma linha no formato: HOOK | CATEGORY | EMOJI | HASHTAGS | R1:L1 | R2:L2 | R3:L3\n"
                 f"- HOOK: Título EXTREMAMENTE CURTO (MÁXIMO 3 PALAVRAS) em MAIÚSCULAS.\n"
                 f"  REGRA DE CAMUFLAGEM: substitua letras por numeros/simbolos SOMENTE se o HOOK\n"
-
                 f"  contiver EXATAMENTE uma destas palavras proibidas:\n"
-
                 f"  MORTE, MORTO, MORREU, MATAR, MATOU, MATARAM, ASSASSINOU, ASSASSINATO,\n"
-
                 f"  ESPANCOU, SANGUE, TIRO, TIROS, BALEADO, ESTUPRO, ESTUPROU, ABUSO,\n"
-
                 f"  TRAFICO, DROGA, DROGAS, COCAINA, CRACK.\n"
-
                 f"  Exemplos CORRETOS: MORTE->M0RT3, MATOU->M@T0U, TIRO->T1R0, SANGUE->S@NGU3, ESTUPRO->3STUPR0.\n"
-
-                f"  PROIBIDO substituir letras em qualquer outra palavra. Exemplos INTACTOS:\n"
-
-                f"  BALE, INSANO, INVASAO, COPA, TREINO, BRASIL, POLICIA, ACIDENTE, ESPORTE,\n"
-
-                f"  VENCE, GANHA, REVELA, FLAGRA, CHOCA, SURPREENDE, BRIGA, CRISE, e qualquer outra.\n"
-
+                f"  PROIBIDO substituir letras em qualquer outra palavra.\n"
                 f"- CATEGORY: Escolha exatamente uma: URGENTE, POLITICA, ESPORTE, FOFOCA, CRIME.\n"
                 f"- EMOJI: UM único emoji que combine com o tema.\n"
-                f"- HASHTAGS: Liste de 3 a 5 hashtags de SEO separadas por espaço, TODAS EM MINÚSCULAS (ex: #noticias #brasil #urgente).\n"
+                f"- HASHTAGS: Liste de 3 a 5 hashtags de SEO separadas por espaço, TODAS EM MINÚSCULAS.\n"
+                f"- R1, R2, R3: Tipo de reação (LIKE, LOVE, CARE, HAHA, WOW, SAD, ANGRY).\n"
+                f"- L1, L2, L3: Opinião curtíssima (máximo 2 palavras). Ex: WOW:Nossa! | SAD:Triste | ANGRY:Absurdo\n"
                 f"Não repita o último título: \"{last_t}\"."
             )
             payload = {"contents":[{"parts":[{"text":prompt}]}]}
@@ -185,7 +176,17 @@ def gerar_gancho(title):
                         save_last_title(hook)
                         config = CATEGORIES.get(cat_key, CATEGORIES["URGENTE"])
                         emoji_hex = EMOJI_HEX.get(emoji_char, "1f525")
-                        reactions = REACTION_EMOJIS_BY_CATEGORY.get(cat_key, REACTION_EMOJIS_BY_CATEGORY["URGENTE"])
+                        
+                        reactions = []
+                        # Parsear as reações (R:L) das partes 4, 5 e 6
+                        for i in range(4, 7):
+                            if i < len(parts) and ":" in parts[i]:
+                                r_type, r_label = parts[i].split(":", 1)
+                                r_type = r_type.strip().upper()
+                                r_label = r_label.strip()
+                                if r_type in FB_REACTIONS:
+                                    reactions.append((FB_REACTIONS[r_type], r_label))
+                        
                         return {
                             "hook": hook, 
                             "tag": config["tag"],
