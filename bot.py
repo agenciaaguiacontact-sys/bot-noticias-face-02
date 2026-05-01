@@ -592,20 +592,7 @@ def get_noticias():
                         if link.startswith("/"): link = "https://www.sharesforyou.com" + link
                         if img and img.startswith("/"): img = "https://www.sharesforyou.com" + img
                         
-                        # FIX 403: baixar imagem dentro da sessão autenticada do Playwright
-                        img_bytes = None
-                        if img:
-                            try:
-                                resp = page.request.get(img)
-                                if resp.status == 200:
-                                    img_bytes = resp.body()
-                                    log.info(f"🖼️ Imagem baixada via Playwright ({len(img_bytes)//1024}KB)")
-                                else:
-                                    log.warning(f"⚠️ Status imagem: {resp.status} para {img}")
-                            except Exception as e_img:
-                                log.warning(f"⚠️ Erro baixando imagem via Playwright: {e_img}")
-                        
-                        res.append({"id": make_article_id(title), "title": title, "link": link, "img": img, "img_bytes": img_bytes})
+                        res.append({"id": make_article_id(title), "title": title, "link": link, "img": img})
                 except: continue
         except Exception as e: log.error(f"Erro Playwright: {e}")
         finally: browser.close()
@@ -665,18 +652,23 @@ def main():
             continue
         
         log.info(f"🆕 Notícia inédita encontrada: {n['title'][:60]}")
+        
         try:
-            # Usar bytes baixados via Playwright (evita 403) ou fallback por URL
-            img_data = n.get("img_bytes")
-            if img_data is None:
-                if not n.get("img"):
-                    log.warning(f"⚠️ Sem imagem para: {n['title'][:50]}")
-                    continue
-                r_img = requests.get(n["img"], headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-                if r_img.status_code != 200:
-                    log.warning(f"⚠️ Imagem retornou {r_img.status_code}, pulando.")
-                    continue
-                img_data = r_img.content
+            # Baixar imagem apenas agora que sabemos que vamos postar
+            img_data = None
+            if n.get("img"):
+                log.info(f"📥 Baixando imagem: {n['img'][:50]}...")
+                try:
+                    r_img = requests.get(n["img"], headers=HEADERS, timeout=15)
+                    if r_img.status_code == 200:
+                        img_data = r_img.content
+                        log.info(f"✅ Imagem baixada ({len(img_data)//1024}KB)")
+                except Exception as e_img:
+                    log.warning(f"⚠️ Erro no download simples: {e_img}")
+
+            if not img_data:
+                log.warning(f"⚠️ Sem imagem válida para: {n['title'][:50]}, pulando.")
+                continue
             
             estetica = gerar_gancho(n["title"])
             img_b = adicionar_texto_premium(img_data, estetica)
@@ -731,8 +723,18 @@ def main():
                 break
             else:
                 log.error("Falha ao publicar Reel.")
+                
+                # Tentar identificar se o erro foi de TOKEN expirado (OAuthException 190)
+                # O erro costuma vir no log do publicar_reel ou no traceback.
+                # Se for token, não adianta tentar as próximas notícias agora.
                 if os.path.exists(temp_img): os.remove(temp_img)
                 if os.path.exists(temp_video): os.remove(temp_video)
+                
+                # Verificação simplificada de erro de token no log (simulada aqui pelo fluxo)
+                # Em um cenário real, poderíamos checar a resposta da API Meta no publicar_reel
+                # Como o erro ocorreu 190/463 nos logs do usuário, vamos forçar parada se falhar.
+                log.warning("🛑 Interrompendo execução por falha na publicação (verifique o TOKEN).")
+                break
         except Exception as e: 
             log.error(f"Erro no loop principal: {e}")
             log.error(traceback.format_exc())
