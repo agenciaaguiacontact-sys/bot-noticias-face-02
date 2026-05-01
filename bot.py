@@ -167,7 +167,7 @@ def gerar_gancho(title):
         "color": (255, 0, 0, 200), "emoji": "1f6a8",
         "hashtags": "#noticias #urgente",
         "category": "URGENTE",
-        "reactions": [("1f631", "Absurdo!"), ("1f622", "Que triste"), ("1f621", "Indignado")]
+        "reactions": [("1f631", "Finalmente!"), ("1f44d", "Boa notícia"), ("1f621", "Duvido muito")]
     }
     if not GEMINI_KEY: return default_res
     
@@ -208,6 +208,7 @@ def gerar_gancho(title):
                 f"- EMOJI: UM único emoji que combine com o tema.\n"
                 f"- HASHTAGS: Liste de 3 a 5 hashtags de SEO separadas por espaço, TODAS EM MINÚSCULAS.\n"
                 f"- R1, R2, R3: Tipo de reação (LIKE, LOVE, CARE, HAHA, WOW, SAD, ANGRY).\n"
+                f"  L1, L2, L3: Uma opinião CURTA (ex: Finalmente!, Que absurdo, Triste demais) sobre a notícia.\n"
                 f"Não retorne opiniões repetidas, varie sempre.\n"
                 f"PROIBIDO REPETIR QUALQUER UM DESTES ÚLTIMOS HOOKS GERADOS: {recent_str}."
             )
