@@ -48,7 +48,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Adiciona posted_ids.json e last_title.txt se existirem
+          # posted_ids.json é a única fonte de verdade (contém IDs + títulos recentes)
           git add posted_ids.json last_title.txt 2>/dev/null || true
           # Só commita se houver mudanças reais
           if git diff --cached --quiet; then

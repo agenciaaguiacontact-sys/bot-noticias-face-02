@@ -20,6 +20,7 @@ import traceback
 import subprocess
 import glob
 from dotenv import load_dotenv
+import difflib
 
 load_dotenv(override=True)
 
@@ -55,28 +56,80 @@ def make_session():
     s.mount("https://", HTTPAdapter(max_retries=r))
     return s
 
-def load_posted():
-    if os.path.exists(POSTED_FILE):
-        try: return set(json.load(open(POSTED_FILE)))
-        except: return set()
-    return set()
+# Palavras irrelevantes para normalização semântica de títulos
+_STOP_WORDS = {
+    "de","da","do","das","dos","a","o","as","os","e","em","no","na","nos","nas",
+    "por","para","com","que","se","ao","à","um","uma","uns","umas","é","foi",
+    "ser","ter","mais","mas","ou","ele","ela","eles","elas","seu","sua"
+}
 
-def save_posted(ids):
-    json.dump(sorted(list(ids))[-500:], open(POSTED_FILE, "w"), indent=2)
+def normalizar_titulo(title):
+    """Normaliza título removendo stop words, números e pontuação para comparação semântica."""
+    t = title.lower()
+    t = re.sub(r'[^\w\s]', '', t)          # Remove pontuação
+    t = re.sub(r'\b\d+\b', '', t)          # Remove números isolados
+    palavras = [w for w in t.split() if w not in _STOP_WORDS and len(w) > 2]
+    return ' '.join(sorted(palavras))       # Ordena para capturar rearranjos de palavras
 
-def make_article_id(url):
-    # Remove query strings para evitar duplicatas por parâmetros de rastreio
-    clean_url = url.split("?")[0].split("#")[0]
-    return hashlib.sha256(clean_url.encode()).hexdigest()[:16]
+def make_article_id(title):
+    """Gera ID estável baseado no título normalizado — imune a variações de pontuação/capitalização."""
+    chave = normalizar_titulo(title)
+    return hashlib.sha256(chave.encode('utf-8')).hexdigest()[:16]
 
-def load_last_title():
+def load_state():
+    """
+    Carrega o estado unificado do bot a partir do posted_ids.json.
+    Retorna (set_de_ids, lista_de_titulos_recentes).
+    Suporta tanto o formato legado (lista de IDs) quanto o novo formato (dict com ids + titles).
+    """
+    if not os.path.exists(POSTED_FILE):
+        return set(), []
+    try:
+        with open(POSTED_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # Formato legado: lista de strings
+        if isinstance(data, list):
+            log.info(f"📂 Estado legado carregado: {len(data)} IDs. Migrando para novo formato.")
+            return set(data), []
+        # Novo formato: dicionário
+        if isinstance(data, dict):
+            ids = set(data.get("ids", []))
+            titles = data.get("titles", [])
+            log.info(f"📂 Estado carregado: {len(ids)} IDs únicos | {len(titles)} títulos recentes.")
+            return ids, titles
+    except Exception as e:
+        log.warning(f"⚠️ Erro ao carregar estado: {e}")
+    return set(), []
+
+def save_state(ids_set, titles_list):
+    """Salva o estado unificado em formato JSON estruturado."""
+    # Mantém os últimos 200 títulos para o fuzzy match (sem crescer indefinidamente)
+    titles_list = titles_list[-200:]
+    data = {
+        "ids": sorted(list(ids_set)),
+        "titles": titles_list
+    }
+    try:
+        with open(POSTED_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        log.info(f"💾 Estado salvo: {len(ids_set)} IDs | {len(titles_list)} títulos.")
+    except Exception as e:
+        log.error(f"❌ Falha ao salvar estado: {e}")
+
+def load_recent_titles():
+    """Carrega títulos recentes para o Gemini não repetir HOOKs visuais."""
     if os.path.exists("last_title.txt"):
-        try: return open("last_title.txt", "r", encoding="utf-8").read().strip()
-        except: return ""
-    return ""
+        try:
+            with open("last_title.txt", "r", encoding="utf-8") as f:
+                return [linha.strip() for linha in f.readlines() if linha.strip()]
+        except: return []
+    return []
 
-def save_last_title(title):
-    try: open("last_title.txt", "w", encoding="utf-8").write(title)
+def save_recent_titles(titles_list):
+    try:
+        with open("last_title.txt", "w", encoding="utf-8") as f:
+            for t in titles_list[-15:]:
+                f.write(t + "\n")
     except: pass
 
 def baixar_fonte(emoji=False):
@@ -118,7 +171,8 @@ def gerar_gancho(title):
     }
     if not GEMINI_KEY: return default_res
     
-    last_t = load_last_title()
+    recent_titles = load_recent_titles()
+    recent_str = ", ".join([f'"{t}"' for t in recent_titles]) if recent_titles else "Nenhum"
     
     # Mapeamento de Categorias, Cores e Tags
     CATEGORIES = {
@@ -154,8 +208,8 @@ def gerar_gancho(title):
                 f"- EMOJI: UM único emoji que combine com o tema.\n"
                 f"- HASHTAGS: Liste de 3 a 5 hashtags de SEO separadas por espaço, TODAS EM MINÚSCULAS.\n"
                 f"- R1, R2, R3: Tipo de reação (LIKE, LOVE, CARE, HAHA, WOW, SAD, ANGRY).\n"
-                f"- L1, L2, L3: Opinião curtíssima (máximo 2 palavras). Ex: WOW:Nossa! | SAD:Triste | ANGRY:Absurdo\n"
-                f"Não repita o último título: \"{last_t}\"."
+                f"Não retorne opiniões repetidas, varie sempre.\n"
+                f"PROIBIDO REPETIR QUALQUER UM DESTES ÚLTIMOS HOOKS GERADOS: {recent_str}."
             )
             payload = {"contents":[{"parts":[{"text":prompt}]}]}
             r = requests.post(url, json=payload, timeout=60)
@@ -172,8 +226,10 @@ def gerar_gancho(title):
                     hashtags_raw = parts[3] if len(parts) >= 4 else "#noticias #brasil #urgente"
                     hashtags = hashtags_raw.lower()
                     
-                    if hook != last_t:
-                        save_last_title(hook)
+                    if hook not in recent_titles:
+                        recent_titles.append(hook)
+                        save_recent_titles(recent_titles)
+                        
                         config = CATEGORIES.get(cat_key, CATEGORIES["URGENTE"])
                         emoji_hex = EMOJI_HEX.get(emoji_char, "1f525")
                         
@@ -549,7 +605,7 @@ def get_noticias():
                             except Exception as e_img:
                                 log.warning(f"⚠️ Erro baixando imagem via Playwright: {e_img}")
                         
-                        res.append({"id": make_article_id(link), "title": title, "link": link, "img": img, "img_bytes": img_bytes})
+                        res.append({"id": make_article_id(title), "title": title, "link": link, "img": img, "img_bytes": img_bytes})
                 except: continue
         except Exception as e: log.error(f"Erro Playwright: {e}")
         finally: browser.close()
@@ -570,16 +626,45 @@ def main():
     log.info(f"🔑 PAGE_ID: {FB_PAGE_ID}")
     log.info(f"🔑 TOKEN: {FB_TOKEN[:20]}...")
 
-    posted = load_posted()
+    posted_ids, posted_titles = load_state()
     news = get_noticias()
     if not news:
         log.warning("Nenhuma notícia encontrada.")
         return
     
+    log.info(f"📰 {len(news)} notícias encontradas. Verificando duplicatas...")
+    n_puladas = 0
+    
     for n in news:
-        if n["id"] in posted:
-            log.info(f"⏭️ Pulando: {n['title'][:50]}... (Já postado)")
+        # --- CAMADA 1: Hash exato pelo ID (título normalizado) ---
+        if n["id"] in posted_ids:
+            log.info(f"⏭️ [ID] Pulando: {n['title'][:60]}")
+            n_puladas += 1
             continue
+        
+        # --- CAMADA 2: Fuzzy match semântico contra os últimos 200 títulos ---
+        titulo_norm = normalizar_titulo(n["title"])
+        similaridade_encontrada = False
+        melhor_match = 0.0
+        
+        for titulo_hist in posted_titles:
+            ratio = difflib.SequenceMatcher(None, titulo_norm, titulo_hist).ratio()
+            if ratio > melhor_match:
+                melhor_match = ratio
+            # Threshold de 0.80 — equilibrado: pega reescritas, permite notícias diferentes
+            if ratio >= 0.80:
+                similaridade_encontrada = True
+                log.info(f"⏭️ [Fuzzy {ratio*100:.1f}%] Pulando: {n['title'][:60]}")
+                break
+        
+        if not similaridade_encontrada and melhor_match > 0:
+            log.info(f"  ✅ Mais parecida encontrada: {melhor_match*100:.1f}% — permitida.")
+        
+        if similaridade_encontrada:
+            n_puladas += 1
+            continue
+        
+        log.info(f"🆕 Notícia inédita encontrada: {n['title'][:60]}")
         try:
             # Usar bytes baixados via Playwright (evita 403) ou fallback por URL
             img_data = n.get("img_bytes")
@@ -634,8 +719,11 @@ def main():
             
             if video_id:
                 log.info(f"🔗 LINK REEL: https://www.facebook.com/reels/{video_id}/")
-                posted.add(n["id"])
-                save_posted(posted)
+                
+                # Registra o ID e o título normalizado para deduplicação futura
+                posted_ids.add(n["id"])
+                posted_titles.append(normalizar_titulo(n["title"]))
+                save_state(posted_ids, posted_titles)
                 
                 # Limpeza
                 for f in [temp_img, temp_video]:
